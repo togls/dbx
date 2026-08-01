@@ -50,10 +50,12 @@ import { createRunStatementButtonDom, loadEditorTheme, editorFontTheme } from "@
 import { orderAiConfigsForDisplay } from "@/lib/ai/aiConfigOrdering";
 import { MAX_AGENT_TURNS_DEFAULT, MAX_AGENT_TURNS_MAX, MAX_AGENT_TURNS_MIN, maxAgentTurnsOutOfRange, normalizeMaxAgentTurns } from "@/lib/ai/maxAgentTurns";
 import ThemeCustomizerDialog from "./ThemeCustomizerDialog.vue";
+import WindowAppearanceSettings from "./WindowAppearanceSettings.vue";
 import TunnelProfileManager from "@/components/connection/TunnelProfileManager.vue";
 import DangerConfirmDialog from "./DangerConfirmDialog.vue";
 import { isTauriRuntime } from "@/lib/backend/tauriRuntime";
 import { useTheme } from "@/composables/useTheme";
+import { useWindowAppearance } from "@/composables/useWindowAppearance";
 import { copyToClipboard } from "@/lib/common/clipboard";
 import { clearDebugLogs as clearStoredDebugLogs, downloadDebugLogs, getDebugLogBundleText } from "@/lib/backend/debugLog";
 import {
@@ -199,10 +201,14 @@ const settingsContentClass = computed(() =>
 const settingsTitleComponent = computed(() => (isSettingsPage.value ? "h2" : DialogTitle));
 
 function onSettingsRootOpenChange(value: boolean) {
-  if (!isSettingsPage.value) emit("update:open", value);
+  if (!isSettingsPage.value) {
+    if (!value) restoreWindowAppearanceDraft();
+    emit("update:open", value);
+  }
 }
 
 function closeSettings() {
+  restoreWindowAppearanceDraft();
   emit("update:open", false);
 }
 
@@ -315,6 +321,8 @@ const editQuitOnClose = ref(settingsStore.desktopSettings.quit_on_close);
 const desktopCloseBehaviorResetPending = ref(false);
 const editIconTheme = ref<DesktopIconTheme>(settingsStore.desktopSettings.icon_theme);
 const editDebugLoggingEnabled = ref(settingsStore.desktopSettings.debug_logging_enabled);
+const editWindowTransparencyEnabled = ref(settingsStore.desktopSettings.window_transparency_enabled);
+const editWindowBackgroundOpacity = ref(settingsStore.desktopSettings.window_background_opacity);
 const editDuckDbWorkerProcessIsolation = ref(settingsStore.desktopSettings.duckdb_worker_process_isolation);
 const editDuckDbWorkerMaxProcesses = ref(settingsStore.desktopSettings.duckdb_worker_max_processes);
 const startupDuckDbWorkerProcessIsolation = ref(settingsStore.desktopSettings.duckdb_worker_process_isolation);
@@ -322,6 +330,25 @@ const startupDuckDbWorkerMaxProcesses = ref(settingsStore.desktopSettings.duckdb
 const duckDbWorkerStartupCaptured = ref(false);
 const duckDbRestarting = ref(false);
 const editSidebarTablePageSize = ref(settingsStore.desktopSettings.sidebar_table_page_size ?? DEFAULT_SIDEBAR_TABLE_PAGE_SIZE);
+const { applySavedWindowAppearance, restoreSavedWindowAppearance } = useWindowAppearance();
+
+function savedWindowAppearance() {
+  return {
+    enabled: settingsStore.desktopSettings.window_transparency_enabled,
+    opacity: settingsStore.desktopSettings.window_background_opacity,
+  };
+}
+
+function restoreWindowAppearanceDraft() {
+  void restoreSavedWindowAppearance(savedWindowAppearance());
+}
+
+function previewWindowAppearanceDraft() {
+  void applySavedWindowAppearance({
+    enabled: editWindowTransparencyEnabled.value,
+    opacity: editWindowBackgroundOpacity.value,
+  });
+}
 const debugLogCopied = ref(false);
 const debugLogDownloaded = ref(false);
 const editShowColumnCommentsInHeader = ref(settingsStore.editorSettings.showColumnCommentsInHeader);
@@ -788,6 +815,8 @@ watch(
       editQuitOnClose.value = settingsStore.desktopSettings.quit_on_close;
       editIconTheme.value = settingsStore.desktopSettings.icon_theme;
       editDebugLoggingEnabled.value = settingsStore.desktopSettings.debug_logging_enabled;
+      editWindowTransparencyEnabled.value = settingsStore.desktopSettings.window_transparency_enabled;
+      editWindowBackgroundOpacity.value = settingsStore.desktopSettings.window_background_opacity;
       editDuckDbWorkerProcessIsolation.value = settingsStore.desktopSettings.duckdb_worker_process_isolation;
       editSidebarTablePageSize.value = settingsStore.desktopSettings.sidebar_table_page_size ?? DEFAULT_SIDEBAR_TABLE_PAGE_SIZE;
     }
@@ -858,6 +887,8 @@ function hasChanges(): boolean {
     editQuitOnClose.value !== settingsStore.desktopSettings.quit_on_close ||
     editIconTheme.value !== settingsStore.desktopSettings.icon_theme ||
     editDebugLoggingEnabled.value !== settingsStore.desktopSettings.debug_logging_enabled ||
+    editWindowTransparencyEnabled.value !== settingsStore.desktopSettings.window_transparency_enabled ||
+    editWindowBackgroundOpacity.value !== settingsStore.desktopSettings.window_background_opacity ||
     editDuckDbWorkerProcessIsolation.value !== settingsStore.desktopSettings.duckdb_worker_process_isolation ||
     normalizeDuckDbWorkerMaxProcesses(editDuckDbWorkerMaxProcesses.value) !== settingsStore.desktopSettings.duckdb_worker_max_processes ||
     editSidebarTablePageSize.value !== (settingsStore.desktopSettings.sidebar_table_page_size ?? DEFAULT_SIDEBAR_TABLE_PAGE_SIZE)
@@ -874,16 +905,23 @@ async function persistSettings() {
     await settingsStore.persistEditorSettings();
     editEditorSettingsBase.value = editorSettingsDraftFromSettings(settingsStore.editorSettings);
   }
-  await settingsStore.updateDesktopSettings({
-    show_tray_icon: editShowTrayIcon.value,
-    quit_on_close: editQuitOnClose.value,
-    close_action_prompted: desktopCloseBehaviorResetPending.value ? false : true,
-    icon_theme: editIconTheme.value,
-    debug_logging_enabled: editDebugLoggingEnabled.value,
-    duckdb_worker_process_isolation: editDuckDbWorkerProcessIsolation.value,
-    duckdb_worker_max_processes: normalizeDuckDbWorkerMaxProcesses(editDuckDbWorkerMaxProcesses.value),
-    sidebar_table_page_size: editSidebarTablePageSize.value,
-  });
+  try {
+    await settingsStore.updateDesktopSettings({
+      show_tray_icon: editShowTrayIcon.value,
+      quit_on_close: editQuitOnClose.value,
+      close_action_prompted: desktopCloseBehaviorResetPending.value ? false : true,
+      icon_theme: editIconTheme.value,
+      debug_logging_enabled: editDebugLoggingEnabled.value,
+      duckdb_worker_process_isolation: editDuckDbWorkerProcessIsolation.value,
+      duckdb_worker_max_processes: normalizeDuckDbWorkerMaxProcesses(editDuckDbWorkerMaxProcesses.value),
+      sidebar_table_page_size: editSidebarTablePageSize.value,
+      window_transparency_enabled: editWindowTransparencyEnabled.value,
+      window_background_opacity: editWindowBackgroundOpacity.value,
+    });
+  } catch (error) {
+    await restoreSavedWindowAppearance(savedWindowAppearance());
+    throw error;
+  }
   desktopCloseBehaviorResetPending.value = false;
   if (sidebarObjectDisplayChanged) {
     await connectionStore.refreshAllTree();
@@ -954,6 +992,9 @@ function resetDefaultsForTab(tab: SettingsCategory) {
     desktopCloseBehaviorResetPending.value = true;
     editIconTheme.value = DEFAULT_DESKTOP_SETTINGS.icon_theme;
     editDebugLoggingEnabled.value = DEFAULT_DESKTOP_SETTINGS.debug_logging_enabled;
+    editWindowTransparencyEnabled.value = DEFAULT_DESKTOP_SETTINGS.window_transparency_enabled;
+    editWindowBackgroundOpacity.value = DEFAULT_DESKTOP_SETTINGS.window_background_opacity;
+    previewWindowAppearanceDraft();
   } else if (tab === "navigation") {
     editSidebarTablePageSize.value = DEFAULT_SIDEBAR_TABLE_PAGE_SIZE;
     editSidebarActivation.value = DEFAULT_EDITOR_SETTINGS.sidebarActivation;
@@ -1031,6 +1072,9 @@ function resetAllDefaults() {
   desktopCloseBehaviorResetPending.value = true;
   editIconTheme.value = DEFAULT_DESKTOP_SETTINGS.icon_theme;
   editDebugLoggingEnabled.value = DEFAULT_DESKTOP_SETTINGS.debug_logging_enabled;
+  editWindowTransparencyEnabled.value = DEFAULT_DESKTOP_SETTINGS.window_transparency_enabled;
+  editWindowBackgroundOpacity.value = DEFAULT_DESKTOP_SETTINGS.window_background_opacity;
+  previewWindowAppearanceDraft();
   editDuckDbWorkerProcessIsolation.value = DEFAULT_DESKTOP_SETTINGS.duckdb_worker_process_isolation;
   editDuckDbWorkerMaxProcesses.value = DEFAULT_DESKTOP_SETTINGS.duckdb_worker_max_processes;
   editSidebarTablePageSize.value = DEFAULT_SIDEBAR_TABLE_PAGE_SIZE;
@@ -1985,6 +2029,8 @@ watch(
       editQuitOnClose.value = settingsStore.desktopSettings.quit_on_close;
       editIconTheme.value = settingsStore.desktopSettings.icon_theme;
       editDebugLoggingEnabled.value = settingsStore.desktopSettings.debug_logging_enabled;
+      editWindowTransparencyEnabled.value = settingsStore.desktopSettings.window_transparency_enabled;
+      editWindowBackgroundOpacity.value = settingsStore.desktopSettings.window_background_opacity;
       editDuckDbWorkerProcessIsolation.value = settingsStore.desktopSettings.duckdb_worker_process_isolation;
       editDuckDbWorkerMaxProcesses.value = settingsStore.desktopSettings.duckdb_worker_max_processes;
       if (!duckDbWorkerStartupCaptured.value) {
@@ -3130,7 +3176,10 @@ watch(
   },
 );
 
-onUnmounted(cleanupPreviewEditor);
+onUnmounted(() => {
+  cleanupPreviewEditor();
+  restoreWindowAppearanceDraft();
+});
 </script>
 
 <template>
@@ -3872,6 +3921,8 @@ onUnmounted(cleanupPreviewEditor);
                   </Button>
                 </div>
               </div>
+
+              <WindowAppearanceSettings v-if="!isWeb" v-model:enabled="editWindowTransparencyEnabled" v-model:opacity="editWindowBackgroundOpacity" />
 
               <div v-if="!isWeb" class="flex items-center justify-between gap-4 rounded-md border bg-muted/20 px-3 py-2">
                 <div class="space-y-1">

@@ -150,11 +150,11 @@ fn uses_application_level_icon(target_os: &str) -> bool {
 }
 
 fn should_show_main_window_after_setup() -> bool {
-    true
+    false
 }
 
 fn should_show_main_window_before_setup_tasks() -> bool {
-    true
+    false
 }
 
 fn startup_probe_log_dir_from_inputs(
@@ -1038,13 +1038,13 @@ mod tests {
     }
 
     #[test]
-    fn shows_main_window_after_regular_startup_setup() {
-        assert!(should_show_main_window_after_setup());
+    fn keeps_main_window_hidden_until_frontend_appearance_is_ready() {
+        assert!(!should_show_main_window_after_setup());
     }
 
     #[test]
-    fn shows_main_window_while_startup_setup_continues() {
-        assert!(should_show_main_window_before_setup_tasks());
+    fn keeps_main_window_hidden_while_startup_setup_continues() {
+        assert!(!should_show_main_window_before_setup_tasks());
     }
 
     #[test]
@@ -1571,6 +1571,7 @@ pub fn run() {
             commands::app_settings::mark_frontend_ready,
             commands::app_settings::request_app_close_from_window_controls,
             commands::window_controls::set_macos_traffic_light_position,
+            commands::window_appearance::get_window_transparency_capability,
             commands::app_settings::set_driver_store_dir,
             commands::app_settings::set_plugin_store_dir,
             commands::app_settings::set_agent_store_dir,

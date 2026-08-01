@@ -1669,6 +1669,7 @@ dependencies = [
  "tokio-postgres",
  "tokio-util",
  "uuid",
+ "windows-version",
  "zip",
 ]
 

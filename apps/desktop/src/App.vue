@@ -34,6 +34,7 @@ import { useVisibilityChange } from "@/composables/useVisibilityChange";
 import { useWebDavAutoUpload } from "@/composables/useWebDavAutoUpload";
 import { useScheduledDatabaseBackups } from "@/composables/useScheduledDatabaseBackups";
 import { shouldDrawDesktopWindowFrame } from "@/composables/useWindowControls";
+import { useWindowAppearance } from "@/composables/useWindowAppearance";
 import { createOpenTabsRestorationBarrier, initializeDesktopOpenTabs, type OpenTabsRestorationBarrier } from "@/lib/app/openTabsStartup";
 import { useSaveSqlFolderSelection } from "@/composables/useSaveSqlFolderSelection";
 import "@/i18n";
@@ -161,6 +162,57 @@ const {
 const { setupFileDrop } = useFileDrop();
 
 const isDesktop = isTauriRuntime();
+const { applySavedWindowAppearance, forceOpaqueWindowAppearance } = useWindowAppearance();
+let desktopWindowAppearanceReady = false;
+let desktopWindowInitializationPromise: Promise<void> | null = null;
+
+function windowAppearanceSettings() {
+  return {
+    enabled: settingsStore.desktopSettings.window_transparency_enabled,
+    opacity: settingsStore.desktopSettings.window_background_opacity,
+  };
+}
+
+function waitForWindowAppearanceFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    const fallbackTimer = window.setTimeout(resolve, 50);
+    requestAnimationFrame(() => {
+      window.clearTimeout(fallbackTimer);
+      resolve();
+    });
+  });
+}
+
+async function runDesktopWindowInitialization() {
+  try {
+    await settingsStore.initDesktopSettings();
+    await applySavedWindowAppearance(windowAppearanceSettings());
+  } catch (error) {
+    console.error("[window_appearance] startup fallback to opaque", error);
+    forceOpaqueWindowAppearance();
+  }
+
+  desktopWindowAppearanceReady = true;
+  await waitForWindowAppearanceFrame();
+  try {
+    const { getCurrentWindow } = await import("@tauri-apps/api/window");
+    await getCurrentWindow().show();
+  } catch (error) {
+    console.error("[window_appearance] failed to show the main window", error);
+  }
+}
+
+function initializeDesktopWindow(): Promise<void> {
+  desktopWindowInitializationPromise ??= runDesktopWindowInitialization();
+  return desktopWindowInitializationPromise;
+}
+
+watch(
+  () => [settingsStore.desktopSettings.window_transparency_enabled, settingsStore.desktopSettings.window_background_opacity] as const,
+  () => {
+    if (desktopWindowAppearanceReady) void applySavedWindowAppearance(windowAppearanceSettings());
+  },
+);
 const drawDesktopWindowFrame = shouldDrawDesktopWindowFrame(isMacOS(), isDesktop, isWindows());
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 let updateCheckTimer: ReturnType<typeof setInterval> | undefined;
@@ -2024,6 +2076,13 @@ function onLoginSuccess() {
 async function initApp() {
   const t0 = performance.now();
   console.log("[STARTUP] initApp begin");
+  if (isDesktop) {
+    await initializeDesktopWindow();
+  } else {
+    await settingsStore.initDesktopSettings().catch((error) => {
+      console.error("[STARTUP] settingsStore.initDesktopSettings failed", error);
+    });
+  }
   const restoreOpenTabs = async () => {
     await settingsStore.initEditorSettings();
     console.log(`[STARTUP]   settingsStore.initEditorSettings: ${(performance.now() - t0).toFixed(0)}ms`);
@@ -2045,8 +2104,6 @@ async function initApp() {
     } else {
       await restoreOpenTabs();
     }
-    await settingsStore.initDesktopSettings().catch(() => {});
-
     void promptTemplateStore.init();
 
     void Promise.all([initSavedSqlEditorPositions(), savedSqlStore.initFromStorage()])
@@ -2214,7 +2271,8 @@ onUnmounted(() => {
   <LoginPage v-if="setupRequired || (needsAuth && !authenticated)" :setup-mode="setupRequired" @authenticated="onLoginSuccess" />
   <div v-show="!setupRequired && (!needsAuth || authenticated)" class="fixed inset-0 h-screen w-screen overflow-hidden">
     <TooltipProvider :delay-duration="300">
-      <div class="h-screen w-screen max-w-full min-w-[760px] min-h-[600px] flex flex-col bg-background text-foreground overflow-hidden" :class="{ 'dbx-desktop-window-frame': drawDesktopWindowFrame }" :style="appUiFontFamilyStyle">
+      <div class="dbx-app-shell relative isolate h-screen w-screen max-w-full min-w-[760px] min-h-[600px] flex flex-col bg-background text-foreground overflow-hidden" :class="{ 'dbx-desktop-window-frame': drawDesktopWindowFrame }" :style="appUiFontFamilyStyle">
+        <div class="dbx-window-background" aria-hidden="true" />
         <AppToolbar
           :is-dark="isDark"
           :theme-mode="themeMode"

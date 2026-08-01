@@ -107,6 +107,7 @@
 
 :root {
   --background: rgb(255 255 255);
+  --dbx-window-background-opacity: 1;
   --foreground: rgb(10 10 10);
   --card: rgb(255 255 255);
   --card-foreground: rgb(10 10 10);
@@ -164,6 +165,42 @@
   --dbx-sidebar-header: rgb(250 250 250);
   --dbx-window-top-border: rgb(0 0 0 / 0.35);
   --dbx-viewport-height: 100vh;
+}
+
+html,
+body,
+#root {
+  background-color: var(--background);
+}
+
+:root[data-window-material="mica"],
+:root[data-window-material="mica"] body,
+:root[data-window-material="mica"] #root,
+:root[data-window-material="mica"] .dbx-app-shell {
+  background: transparent !important;
+}
+
+.dbx-window-background {
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background-color: var(--background);
+  transition: background-color 120ms ease;
+}
+
+:root[data-window-material="mica"] .dbx-window-background {
+  background-color: color-mix(
+    in srgb,
+    var(--background) calc(var(--dbx-window-background-opacity) * 100%),
+    transparent
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dbx-window-background {
+    transition: none;
+  }
 }
 
 :root[data-corner-style="large"] {

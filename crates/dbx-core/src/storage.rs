@@ -175,6 +175,10 @@ pub struct DesktopSettings {
     pub agent_store_dir: Option<String>,
     #[serde(default = "default_sidebar_table_page_size")]
     pub sidebar_table_page_size: usize,
+    #[serde(default)]
+    pub window_transparency_enabled: bool,
+    #[serde(default = "default_window_background_opacity")]
+    pub window_background_opacity: u8,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -212,6 +216,9 @@ fn default_sidebar_table_page_size() -> usize {
 pub const DUCKDB_WORKER_MAX_PROCESSES_MIN: usize = 1;
 pub const DUCKDB_WORKER_MAX_PROCESSES_MAX: usize = 16;
 pub const DUCKDB_WORKER_MAX_PROCESSES_DEFAULT: usize = 4;
+pub const WINDOW_BACKGROUND_OPACITY_MIN: u8 = 50;
+pub const WINDOW_BACKGROUND_OPACITY_MAX: u8 = 100;
+pub const WINDOW_BACKGROUND_OPACITY_DEFAULT: u8 = 85;
 
 pub fn default_duckdb_worker_max_processes() -> usize {
     DUCKDB_WORKER_MAX_PROCESSES_DEFAULT
@@ -219,6 +226,14 @@ pub fn default_duckdb_worker_max_processes() -> usize {
 
 pub fn normalize_duckdb_worker_max_processes(value: usize) -> usize {
     value.clamp(DUCKDB_WORKER_MAX_PROCESSES_MIN, DUCKDB_WORKER_MAX_PROCESSES_MAX)
+}
+
+pub fn default_window_background_opacity() -> u8 {
+    WINDOW_BACKGROUND_OPACITY_DEFAULT
+}
+
+pub fn normalize_window_background_opacity(value: u8) -> u8 {
+    value.clamp(WINDOW_BACKGROUND_OPACITY_MIN, WINDOW_BACKGROUND_OPACITY_MAX)
 }
 
 impl Default for DesktopSettings {
@@ -236,6 +251,8 @@ impl Default for DesktopSettings {
             plugin_store_dir: None,
             agent_store_dir: None,
             sidebar_table_page_size: default_sidebar_table_page_size(),
+            window_transparency_enabled: false,
+            window_background_opacity: default_window_background_opacity(),
         }
     }
 }
@@ -1551,6 +1568,16 @@ impl Storage {
             "sidebar_table_page_size".to_string(),
             serde_json::Value::Number(serde_json::Number::from(desktop_settings.sidebar_table_page_size)),
         );
+        settings.insert(
+            "window_transparency_enabled".to_string(),
+            serde_json::Value::Bool(desktop_settings.window_transparency_enabled),
+        );
+        settings.insert(
+            "window_background_opacity".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(normalize_window_background_opacity(
+                desktop_settings.window_background_opacity,
+            ))),
+        );
         self.save_app_settings_json(&settings).await
     }
 
@@ -1614,6 +1641,16 @@ impl Storage {
                 .and_then(|value| value.as_u64())
                 .map(|value| value as usize)
                 .unwrap_or_else(|| DesktopSettings::default().sidebar_table_page_size),
+            window_transparency_enabled: settings
+                .get("window_transparency_enabled")
+                .and_then(|value| value.as_bool())
+                .unwrap_or_default(),
+            window_background_opacity: settings
+                .get("window_background_opacity")
+                .and_then(|value| value.as_u64())
+                .and_then(|value| u8::try_from(value).ok())
+                .map(normalize_window_background_opacity)
+                .unwrap_or_else(default_window_background_opacity),
         })
     }
 
@@ -3663,7 +3700,8 @@ fn map_from_sql_err(err: serde_json::Error) -> rusqlite::Error {
 mod tests {
     use super::{
         maybe_import_user_data_db, DataDbImportResult, DesktopIconTheme, DesktopSettings, McpGlobalPolicy,
-        McpGlobalPolicyState, Storage, MCP_GLOBAL_POLICY_KEY,
+        McpGlobalPolicyState, Storage, MCP_GLOBAL_POLICY_KEY, WINDOW_BACKGROUND_OPACITY_DEFAULT,
+        WINDOW_BACKGROUND_OPACITY_MAX, WINDOW_BACKGROUND_OPACITY_MIN,
     };
     use crate::ai::{AiActiveModelSelection, AiChatSelectionState, AiEffortSelection, AiModelEffortPreference};
     use crate::connection_secrets::NACOS_RNACOS_CONSOLE_PASSWORD_KEY;
@@ -4462,6 +4500,17 @@ mod tests {
         assert_eq!(storage.load_desktop_settings().await.unwrap(), DesktopSettings::default());
     }
 
+    #[test]
+    fn desktop_settings_deserialize_legacy_json_with_window_appearance_defaults() {
+        let settings: DesktopSettings = serde_json::from_str(
+            r#"{"show_tray_icon":true,"icon_theme":"default","duckdb_worker_max_processes":4,"sidebar_table_page_size":1000}"#,
+        )
+        .unwrap();
+
+        assert!(!settings.window_transparency_enabled);
+        assert_eq!(settings.window_background_opacity, WINDOW_BACKGROUND_OPACITY_DEFAULT);
+    }
+
     #[tokio::test]
     async fn mcp_global_policy_defaults_unconfigured_and_roundtrips_atomically() {
         let path = temp_db_path("mcp-global-policy");
@@ -4659,6 +4708,8 @@ mod tests {
                 plugin_store_dir: Some("/tmp/dbx-plugins".to_string()),
                 agent_store_dir: Some("/tmp/dbx-agents".to_string()),
                 sidebar_table_page_size: DesktopSettings::default().sidebar_table_page_size,
+                window_transparency_enabled: true,
+                window_background_opacity: 72,
             })
             .await
             .unwrap();
@@ -4679,6 +4730,8 @@ mod tests {
                 plugin_store_dir: Some("/tmp/dbx-plugins".to_string()),
                 agent_store_dir: Some("/tmp/dbx-agents".to_string()),
                 sidebar_table_page_size: DesktopSettings::default().sidebar_table_page_size,
+                window_transparency_enabled: true,
+                window_background_opacity: 72,
             }
         );
     }
@@ -4734,6 +4787,34 @@ mod tests {
             .unwrap();
 
         assert_eq!(storage.load_desktop_settings().await.unwrap().duckdb_worker_max_processes, 8);
+    }
+
+    #[tokio::test]
+    async fn desktop_settings_persist_and_clamp_window_appearance() {
+        let path = temp_db_path("desktop-settings-window-appearance");
+        let storage = Storage::open(&path).await.unwrap();
+
+        storage
+            .save_desktop_settings(&DesktopSettings {
+                window_transparency_enabled: true,
+                window_background_opacity: 20,
+                ..DesktopSettings::default()
+            })
+            .await
+            .unwrap();
+
+        let loaded = storage.load_desktop_settings().await.unwrap();
+        assert!(loaded.window_transparency_enabled);
+        assert_eq!(loaded.window_background_opacity, WINDOW_BACKGROUND_OPACITY_MIN);
+
+        storage
+            .save_desktop_settings(&DesktopSettings { window_background_opacity: 200, ..DesktopSettings::default() })
+            .await
+            .unwrap();
+        assert_eq!(
+            storage.load_desktop_settings().await.unwrap().window_background_opacity,
+            WINDOW_BACKGROUND_OPACITY_MAX
+        );
     }
 
     #[tokio::test]

@@ -234,6 +234,16 @@ describe("normalizeDesktopSettings", () => {
     expect(normalizeDesktopSettings({ duckdb_worker_max_processes: 32 }).duckdb_worker_max_processes).toBe(16);
     expect(normalizeDesktopSettings({ duckdb_worker_max_processes: 3.6 }).duckdb_worker_max_processes).toBe(4);
   });
+
+  it("defaults and normalizes window appearance settings", () => {
+    expect(normalizeDesktopSettings({}).window_transparency_enabled).toBe(false);
+    expect(normalizeDesktopSettings({}).window_background_opacity).toBe(85);
+    expect(normalizeDesktopSettings({ window_transparency_enabled: true }).window_transparency_enabled).toBe(true);
+    expect(normalizeDesktopSettings({ window_background_opacity: Number.NaN }).window_background_opacity).toBe(85);
+    expect(normalizeDesktopSettings({ window_background_opacity: 49 }).window_background_opacity).toBe(50);
+    expect(normalizeDesktopSettings({ window_background_opacity: 101 }).window_background_opacity).toBe(100);
+    expect(normalizeDesktopSettings({ window_background_opacity: 72.6 }).window_background_opacity).toBe(73);
+  });
 });
 
 describe("normalizeMcpGlobalPolicy", () => {

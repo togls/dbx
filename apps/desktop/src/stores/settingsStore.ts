@@ -19,6 +19,9 @@ import { DEFAULT_TABLE_COLUMN_TEMPLATE_FIELDS, normalizeTableColumnTemplateField
 import { DEFAULT_DATA_GRID_FONT_FAMILY, DEFAULT_UI_FONT_FAMILY } from "@/lib/app/appFonts";
 import { safeLocalStorageGet, safeLocalStorageRemove } from "@/lib/backend/safeStorage";
 import type { AiProvider, AiApiStyle, AiAuthMethod, AiEffortLevel, AiReasoningLevel, AiConfiguredModel, AiConfig, AiTestConnectionResult, AiConfigItem, AiChatSelectionState, AiEffortSelection, AiModelEffortPreference } from "@/types/ai";
+import { WINDOW_BACKGROUND_OPACITY_DEFAULT, normalizeWindowBackgroundOpacity } from "@/lib/windowAppearanceSettings";
+
+export { WINDOW_BACKGROUND_OPACITY_DEFAULT, WINDOW_BACKGROUND_OPACITY_MAX, WINDOW_BACKGROUND_OPACITY_MIN, normalizeWindowBackgroundOpacity } from "@/lib/windowAppearanceSettings";
 
 export type { AiProvider, AiApiStyle, AiAuthMethod, AiEffortLevel, AiReasoningLevel, AiConfiguredModel, AiConfig, AiTestConnectionResult, AiConfigItem, AiChatSelectionState, AiEffortSelection };
 export type { SavedSqlOpenTargetMode };
@@ -36,6 +39,8 @@ export interface DesktopSettings {
   plugin_store_dir?: string | null;
   agent_store_dir?: string | null;
   sidebar_table_page_size?: number | null;
+  window_transparency_enabled: boolean;
+  window_background_opacity: number;
 }
 
 export interface McpGlobalPolicy {
@@ -72,6 +77,8 @@ export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
   plugin_store_dir: null,
   agent_store_dir: null,
   sidebar_table_page_size: DEFAULT_SIDEBAR_TABLE_PAGE_SIZE,
+  window_transparency_enabled: false,
+  window_background_opacity: WINDOW_BACKGROUND_OPACITY_DEFAULT,
 };
 
 export const DEFAULT_MCP_GLOBAL_POLICY: McpGlobalPolicy = {
@@ -107,6 +114,8 @@ export function normalizeDesktopSettings(settings: Partial<DesktopSettings> | nu
     plugin_store_dir: settings?.plugin_store_dir?.trim() || DEFAULT_DESKTOP_SETTINGS.plugin_store_dir,
     agent_store_dir: settings?.agent_store_dir?.trim() || DEFAULT_DESKTOP_SETTINGS.agent_store_dir,
     sidebar_table_page_size: sidebarTablePageSize,
+    window_transparency_enabled: settings?.window_transparency_enabled === true,
+    window_background_opacity: normalizeWindowBackgroundOpacity(settings?.window_background_opacity),
   };
 }
 
