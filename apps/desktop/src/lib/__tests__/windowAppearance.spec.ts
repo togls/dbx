@@ -34,7 +34,7 @@ function createController(capability = MICA_CAPABILITY) {
 
 afterEach(() => {
   document.documentElement.removeAttribute("data-window-material");
-  document.documentElement.style.removeProperty("--dbx-window-background-opacity");
+  document.documentElement.style.removeProperty("--dbx-window-background-opacity-percent");
 });
 
 describe("window appearance controller", () => {
@@ -45,9 +45,10 @@ describe("window appearance controller", () => {
     controller.previewBackgroundOpacity(72);
 
     expect(setMica).toHaveBeenCalledTimes(1);
+    expect(controller.runtimeState.apiApplied).toBe(true);
     expect(controller.runtimeState.active).toBe(true);
     expect(document.documentElement.dataset.windowMaterial).toBe("mica");
-    expect(document.documentElement.style.getPropertyValue("--dbx-window-background-opacity")).toBe("0.72");
+    expect(document.documentElement.style.getPropertyValue("--dbx-window-background-opacity-percent")).toBe("72%");
   });
 
   it("restores an opaque background before clearing Mica", async () => {
@@ -57,9 +58,10 @@ describe("window appearance controller", () => {
     await controller.apply({ enabled: false, opacity: 70 });
 
     expect(clearEffects).toHaveBeenCalledTimes(1);
+    expect(controller.runtimeState.apiApplied).toBe(false);
     expect(controller.runtimeState.active).toBe(false);
     expect(document.documentElement.dataset.windowMaterial).toBeUndefined();
-    expect(document.documentElement.style.getPropertyValue("--dbx-window-background-opacity")).toBe("1");
+    expect(document.documentElement.style.getPropertyValue("--dbx-window-background-opacity-percent")).toBe("100%");
   });
 
   it("does not call Mica on unsupported platforms", async () => {
@@ -69,7 +71,7 @@ describe("window appearance controller", () => {
 
     expect(setMica).not.toHaveBeenCalled();
     expect(controller.runtimeState.active).toBe(false);
-    expect(document.documentElement.style.getPropertyValue("--dbx-window-background-opacity")).toBe("1");
+    expect(document.documentElement.style.getPropertyValue("--dbx-window-background-opacity-percent")).toBe("100%");
   });
 
   it("falls back to opaque when applying Mica fails", async () => {
@@ -81,7 +83,7 @@ describe("window appearance controller", () => {
     expect(clearEffects).toHaveBeenCalledTimes(1);
     expect(controller.runtimeState.active).toBe(false);
     expect(controller.runtimeState.error).toBe("mica unavailable");
-    expect(document.documentElement.style.getPropertyValue("--dbx-window-background-opacity")).toBe("1");
+    expect(document.documentElement.style.getPropertyValue("--dbx-window-background-opacity-percent")).toBe("100%");
   });
 
   it("keeps the page opaque when clearing effects fails", async () => {
@@ -94,7 +96,7 @@ describe("window appearance controller", () => {
     expect(controller.runtimeState.active).toBe(false);
     expect(controller.runtimeState.error).toBe("clear failed");
     expect(document.documentElement.dataset.windowMaterial).toBeUndefined();
-    expect(document.documentElement.style.getPropertyValue("--dbx-window-background-opacity")).toBe("1");
+    expect(document.documentElement.style.getPropertyValue("--dbx-window-background-opacity-percent")).toBe("100%");
   });
 
   it("prevents an older async enable from overwriting a newer disable", async () => {
@@ -120,5 +122,19 @@ describe("window appearance controller", () => {
     expect(clearEffects).toHaveBeenCalledTimes(1);
     expect(controller.runtimeState.active).toBe(false);
     expect(document.documentElement.dataset.windowMaterial).toBeUndefined();
+  });
+
+  it("forceOpaque clears native effects and resets the runtime state", async () => {
+    const { controller, clearEffects } = createController();
+    await controller.apply({ enabled: true, opacity: 85 });
+
+    await controller.forceOpaque();
+
+    expect(clearEffects).toHaveBeenCalledTimes(1);
+    expect(controller.runtimeState.apiApplied).toBe(false);
+    expect(controller.runtimeState.active).toBe(false);
+    expect(controller.runtimeState.applying).toBe(false);
+    expect(document.documentElement.dataset.windowMaterial).toBeUndefined();
+    expect(document.documentElement.style.getPropertyValue("--dbx-window-background-opacity-percent")).toBe("100%");
   });
 });

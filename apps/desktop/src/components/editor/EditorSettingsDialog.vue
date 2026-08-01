@@ -193,10 +193,10 @@ const isSettingsPage = computed(() => props.variant === "page");
 const settingsVisible = computed(() => isSettingsPage.value || props.open === true);
 const settingsRootComponent = computed(() => (isSettingsPage.value ? "div" : Dialog));
 const settingsRootProps = computed(() => (isSettingsPage.value ? {} : { open: props.open === true }));
-const settingsRootClass = computed(() => (isSettingsPage.value ? "h-full min-h-0 overflow-hidden bg-background" : ""));
+const settingsRootClass = computed(() => (isSettingsPage.value ? "dbx-settings-surface h-full min-h-0 overflow-hidden" : ""));
 const settingsContentComponent = computed(() => (isSettingsPage.value ? "div" : DialogContent));
 const settingsContentClass = computed(() =>
-  isSettingsPage.value ? "flex h-full min-h-0 flex-col gap-4 overflow-hidden bg-background p-4" : "h-[min(660px,calc(var(--dbx-viewport-height)-80px))] !max-w-[min(920px,calc(100vw-32px))] grid-rows-[auto_minmax(0,1fr)] gap-3 p-4 sm:!max-w-[min(920px,calc(100vw-48px))]",
+  isSettingsPage.value ? "dbx-settings-surface flex h-full min-h-0 flex-col gap-4 overflow-hidden p-4" : "h-[min(660px,calc(var(--dbx-viewport-height)-80px))] !max-w-[min(920px,calc(100vw-32px))] grid-rows-[auto_minmax(0,1fr)] gap-3 p-4 sm:!max-w-[min(920px,calc(100vw-48px))]",
 );
 const settingsTitleComponent = computed(() => (isSettingsPage.value ? "h2" : DialogTitle));
 

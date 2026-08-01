@@ -236,6 +236,22 @@ pub fn normalize_window_background_opacity(value: u8) -> u8 {
     value.clamp(WINDOW_BACKGROUND_OPACITY_MIN, WINDOW_BACKGROUND_OPACITY_MAX)
 }
 
+fn parse_window_background_opacity(value: Option<&serde_json::Value>) -> u8 {
+    let Some(value) = value else {
+        return WINDOW_BACKGROUND_OPACITY_DEFAULT;
+    };
+
+    if let Some(value) = value.as_i64() {
+        return value.clamp(WINDOW_BACKGROUND_OPACITY_MIN as i64, WINDOW_BACKGROUND_OPACITY_MAX as i64) as u8;
+    }
+
+    if let Some(value) = value.as_u64() {
+        return value.clamp(WINDOW_BACKGROUND_OPACITY_MIN as u64, WINDOW_BACKGROUND_OPACITY_MAX as u64) as u8;
+    }
+
+    WINDOW_BACKGROUND_OPACITY_DEFAULT
+}
+
 impl Default for DesktopSettings {
     fn default() -> Self {
         Self {
@@ -1645,12 +1661,7 @@ impl Storage {
                 .get("window_transparency_enabled")
                 .and_then(|value| value.as_bool())
                 .unwrap_or_default(),
-            window_background_opacity: settings
-                .get("window_background_opacity")
-                .and_then(|value| value.as_u64())
-                .and_then(|value| u8::try_from(value).ok())
-                .map(normalize_window_background_opacity)
-                .unwrap_or_else(default_window_background_opacity),
+            window_background_opacity: parse_window_background_opacity(settings.get("window_background_opacity")),
         })
     }
 
@@ -3699,9 +3710,9 @@ fn map_from_sql_err(err: serde_json::Error) -> rusqlite::Error {
 #[cfg(test)]
 mod tests {
     use super::{
-        maybe_import_user_data_db, DataDbImportResult, DesktopIconTheme, DesktopSettings, McpGlobalPolicy,
-        McpGlobalPolicyState, Storage, MCP_GLOBAL_POLICY_KEY, WINDOW_BACKGROUND_OPACITY_DEFAULT,
-        WINDOW_BACKGROUND_OPACITY_MAX, WINDOW_BACKGROUND_OPACITY_MIN,
+        maybe_import_user_data_db, parse_window_background_opacity, DataDbImportResult, DesktopIconTheme,
+        DesktopSettings, McpGlobalPolicy, McpGlobalPolicyState, Storage, MCP_GLOBAL_POLICY_KEY,
+        WINDOW_BACKGROUND_OPACITY_DEFAULT, WINDOW_BACKGROUND_OPACITY_MAX, WINDOW_BACKGROUND_OPACITY_MIN,
     };
     use crate::ai::{AiActiveModelSelection, AiChatSelectionState, AiEffortSelection, AiModelEffortPreference};
     use crate::connection_secrets::NACOS_RNACOS_CONSOLE_PASSWORD_KEY;
@@ -4815,6 +4826,26 @@ mod tests {
             storage.load_desktop_settings().await.unwrap().window_background_opacity,
             WINDOW_BACKGROUND_OPACITY_MAX
         );
+    }
+
+    #[test]
+    fn desktop_settings_parse_window_background_opacity_clamps_integer_values() {
+        let cases = [
+            ("-1", WINDOW_BACKGROUND_OPACITY_MIN),
+            ("49", WINDOW_BACKGROUND_OPACITY_MIN),
+            ("50", WINDOW_BACKGROUND_OPACITY_MIN),
+            ("85", WINDOW_BACKGROUND_OPACITY_DEFAULT),
+            ("100", WINDOW_BACKGROUND_OPACITY_MAX),
+            ("101", WINDOW_BACKGROUND_OPACITY_MAX),
+            ("256", WINDOW_BACKGROUND_OPACITY_MAX),
+            ("\"85\"", WINDOW_BACKGROUND_OPACITY_DEFAULT),
+            ("null", WINDOW_BACKGROUND_OPACITY_DEFAULT),
+        ];
+
+        for (json, expected) in cases {
+            let value = serde_json::from_str::<serde_json::Value>(json).unwrap();
+            assert_eq!(parse_window_background_opacity(Some(&value)), expected, "input={json}");
+        }
     }
 
     #[tokio::test]

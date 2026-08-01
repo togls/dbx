@@ -46,11 +46,14 @@ onMounted(() => {
   <section class="space-y-3 rounded-md border bg-muted/20 px-3 py-3" data-testid="window-appearance-settings">
     <div class="space-y-1">
       <h3 class="text-sm font-medium">{{ t("settings.windowAppearance.title") }}</h3>
-      <p v-if="!supported && capability" class="text-xs text-muted-foreground">
+      <p v-if="runtimeState.error" class="text-xs text-destructive">
+        {{ t("settings.windowAppearance.applyFailed") }}
+      </p>
+      <p v-else-if="!supported && capability" class="text-xs text-muted-foreground">
         {{ t("settings.windowAppearance.windows11Only") }}
       </p>
-      <p v-else-if="runtimeState.error" class="text-xs text-destructive">
-        {{ t("settings.windowAppearance.applyFailed") }}
+      <p v-if="runtimeState.apiApplied && runtimeState.active" class="text-xs text-muted-foreground">
+        {{ t("settings.windowAppearance.micaVisibilityHint") }}
       </p>
     </div>
 

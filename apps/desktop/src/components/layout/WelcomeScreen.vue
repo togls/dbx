@@ -42,7 +42,7 @@ function welcomeConnectionSubtitle(connection: ConnectionConfig): string {
 </script>
 
 <template>
-  <div class="min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-background">
+  <div class="dbx-welcome-surface min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
     <div class="welcome-content mx-auto flex min-h-full w-full min-w-0 max-w-5xl flex-col justify-center gap-6 px-8 py-10">
       <div class="welcome-stats-grid grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
         <div class="min-w-0 overflow-hidden rounded-lg border bg-muted/20 px-4 py-3">

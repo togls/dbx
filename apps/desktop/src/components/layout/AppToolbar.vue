@@ -478,7 +478,7 @@ const toolbarStyle = computed(() => {
 </script>
 
 <template>
-  <div ref="toolbarEl" class="app-toolbar h-10 flex items-center gap-1 px-2 border-b bg-muted/30 shrink-0 overflow-hidden" :style="toolbarStyle" data-tauri-drag-region @dblclick="onToolbarDblClick">
+  <div ref="toolbarEl" class="app-toolbar dbx-app-toolbar dbx-toolbar-surface h-10 flex items-center gap-1 px-2 border-b shrink-0 overflow-hidden" :style="toolbarStyle" data-tauri-drag-region @dblclick="onToolbarDblClick">
     <Button variant="ghost" size="sm" :class="toolbarTextButtonClass" @click="emit('new-connection')">
       <span class="inline-flex items-center gap-1">
         <DatabaseZap class="h-3.5 w-3.5" />

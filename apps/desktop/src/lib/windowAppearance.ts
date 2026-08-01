@@ -4,7 +4,7 @@ import { isTauriRuntime } from "@/lib/backend/tauriRuntime";
 import { normalizeWindowBackgroundOpacity } from "@/lib/windowAppearanceSettings";
 
 const WINDOW_MATERIAL_ATTRIBUTE = "data-window-material";
-const WINDOW_BACKGROUND_OPACITY_PROPERTY = "--dbx-window-background-opacity";
+const WINDOW_BACKGROUND_OPACITY_PROPERTY = "--dbx-window-background-opacity-percent";
 
 export interface WindowTransparencyCapability {
   supported: boolean;
@@ -16,6 +16,9 @@ export interface WindowTransparencyCapability {
 
 export interface WindowTransparencyRuntimeState {
   requested: boolean;
+  /** The native API accepted the effect request; Windows still owns final compositing. */
+  apiApplied: boolean;
+  /** The CSS and native application chain is active, not a pixel-level visibility guarantee. */
   active: boolean;
   applying: boolean;
   capability: WindowTransparencyCapability | null;
@@ -41,7 +44,7 @@ export interface WindowAppearanceController {
   getCapability: () => Promise<WindowTransparencyCapability>;
   apply: (settings: WindowAppearanceSettings) => Promise<void>;
   previewBackgroundOpacity: (opacity: number) => void;
-  forceOpaque: () => void;
+  forceOpaque: () => Promise<void>;
 }
 
 function errorMessage(error: unknown): string {
@@ -49,7 +52,7 @@ function errorMessage(error: unknown): string {
 }
 
 function opacityCssValue(opacity: number): string {
-  return (normalizeWindowBackgroundOpacity(opacity) / 100).toFixed(2);
+  return `${normalizeWindowBackgroundOpacity(opacity)}%`;
 }
 
 function opaqueCapability(reason: string): WindowTransparencyCapability {
@@ -65,6 +68,7 @@ function opaqueCapability(reason: string): WindowTransparencyCapability {
 class DefaultWindowAppearanceController implements WindowAppearanceController {
   readonly runtimeState = reactive<WindowTransparencyRuntimeState>({
     requested: false,
+    apiApplied: false,
     active: false,
     applying: false,
     capability: null,
@@ -80,7 +84,7 @@ class DefaultWindowAppearanceController implements WindowAppearanceController {
   }
 
   private setOpaqueBackground(removeMaterial = true) {
-    this.dependencies.root.style.setProperty(WINDOW_BACKGROUND_OPACITY_PROPERTY, "1");
+    this.dependencies.root.style.setProperty(WINDOW_BACKGROUND_OPACITY_PROPERTY, "100%");
     if (removeMaterial) this.dependencies.root.removeAttribute(WINDOW_MATERIAL_ATTRIBUTE);
   }
 
@@ -89,6 +93,8 @@ class DefaultWindowAppearanceController implements WindowAppearanceController {
       requested: settings.enabled,
       supported: this.runtimeState.capability?.supported ?? false,
       effect: this.runtimeState.capability?.effect ?? "none",
+      apiApplied: this.runtimeState.apiApplied,
+      materialVisibility: this.runtimeState.apiApplied ? "os_managed_unknown" : "opaque",
       windowsBuild: this.runtimeState.capability?.windowsBuild ?? null,
       backgroundOpacity: normalizeWindowBackgroundOpacity(settings.opacity),
       error,
@@ -113,7 +119,7 @@ class DefaultWindowAppearanceController implements WindowAppearanceController {
   }
 
   private async clearMica(settings: WindowAppearanceSettings, revision: number) {
-    this.dependencies.root.style.setProperty(WINDOW_BACKGROUND_OPACITY_PROPERTY, "1");
+    this.dependencies.root.style.setProperty(WINDOW_BACKGROUND_OPACITY_PROPERTY, "100%");
     await this.dependencies.nextFrame();
     this.dependencies.root.removeAttribute(WINDOW_MATERIAL_ATTRIBUTE);
     if (this.effectActive) {
@@ -126,6 +132,7 @@ class DefaultWindowAppearanceController implements WindowAppearanceController {
         if (revision === this.applyRevision) this.runtimeState.error = message;
       }
       this.effectActive = false;
+      this.runtimeState.apiApplied = false;
     }
     if (revision === this.applyRevision) this.runtimeState.active = false;
   }
@@ -133,13 +140,14 @@ class DefaultWindowAppearanceController implements WindowAppearanceController {
   private async applyMica(settings: WindowAppearanceSettings, revision: number) {
     if (this.effectActive && this.runtimeState.active) {
       this.dependencies.root.style.setProperty(WINDOW_BACKGROUND_OPACITY_PROPERTY, opacityCssValue(settings.opacity));
-      this.logState("window_appearance.mica_applied", settings);
+      this.logState("window_appearance.background_opacity_changed", settings);
       return;
     }
     this.setOpaqueBackground();
     if (!this.effectActive) {
       await this.dependencies.setMica();
       this.effectActive = true;
+      this.runtimeState.apiApplied = true;
     }
     if (revision !== this.applyRevision) return;
     this.dependencies.root.setAttribute(WINDOW_MATERIAL_ATTRIBUTE, "mica");
@@ -162,6 +170,7 @@ class DefaultWindowAppearanceController implements WindowAppearanceController {
       });
     }
     this.effectActive = false;
+    this.runtimeState.apiApplied = false;
     this.logState("window_appearance.apply_failed", settings, message);
     this.logState("window_appearance.fallback_opaque", settings, message);
     if (revision === this.applyRevision) {
@@ -204,11 +213,39 @@ class DefaultWindowAppearanceController implements WindowAppearanceController {
     this.dependencies.root.style.setProperty(WINDOW_BACKGROUND_OPACITY_PROPERTY, opacityCssValue(opacity));
   }
 
-  forceOpaque() {
-    ++this.applyRevision;
+  async forceOpaque(): Promise<void> {
+    const revision = ++this.applyRevision;
+    const settings = { enabled: false, opacity: 100 };
+    this.runtimeState.requested = false;
+    this.runtimeState.applying = true;
+    this.runtimeState.error = null;
     this.setOpaqueBackground();
     this.runtimeState.active = false;
-    this.runtimeState.applying = false;
+    const task = this.applyQueue.then(async () => {
+      await this.dependencies.nextFrame();
+      try {
+        await this.dependencies.clearEffects();
+      } catch (error) {
+        const message = errorMessage(error);
+        this.logState("window_appearance.apply_failed", settings, message);
+        if (revision === this.applyRevision) this.runtimeState.error = message;
+      } finally {
+        this.effectActive = false;
+        this.runtimeState.apiApplied = false;
+        if (revision === this.applyRevision) this.runtimeState.applying = false;
+      }
+    });
+    this.applyQueue = task.catch((error) => {
+      const message = errorMessage(error);
+      this.logState("window_appearance.apply_failed", settings, message);
+      this.effectActive = false;
+      this.runtimeState.apiApplied = false;
+      if (revision === this.applyRevision) {
+        this.runtimeState.applying = false;
+        this.runtimeState.error = message;
+      }
+    });
+    await this.applyQueue;
   }
 }
 

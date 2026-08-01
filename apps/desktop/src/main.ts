@@ -35,7 +35,7 @@ function renderStartupError(error: unknown) {
   panel.append(card);
   root.append(panel);
   document.documentElement.removeAttribute("data-window-material");
-  document.documentElement.style.setProperty("--dbx-window-background-opacity", "1");
+  document.documentElement.style.setProperty("--dbx-window-background-opacity-percent", "100%");
   if ((globalThis as Record<string, unknown>).__TAURI_INTERNALS__ || (globalThis as Record<string, unknown>).__TAURI__) {
     void import("@tauri-apps/api/window").then(({ getCurrentWindow }) => getCurrentWindow().show()).catch((showError) => console.error("[STARTUP] failed to show startup error window", showError));
   }

@@ -189,7 +189,7 @@ async function runDesktopWindowInitialization() {
     await applySavedWindowAppearance(windowAppearanceSettings());
   } catch (error) {
     console.error("[window_appearance] startup fallback to opaque", error);
-    forceOpaqueWindowAppearance();
+    await forceOpaqueWindowAppearance();
   }
 
   desktopWindowAppearanceReady = true;
@@ -2271,7 +2271,7 @@ onUnmounted(() => {
   <LoginPage v-if="setupRequired || (needsAuth && !authenticated)" :setup-mode="setupRequired" @authenticated="onLoginSuccess" />
   <div v-show="!setupRequired && (!needsAuth || authenticated)" class="fixed inset-0 h-screen w-screen overflow-hidden">
     <TooltipProvider :delay-duration="300">
-      <div class="dbx-app-shell relative isolate h-screen w-screen max-w-full min-w-[760px] min-h-[600px] flex flex-col bg-background text-foreground overflow-hidden" :class="{ 'dbx-desktop-window-frame': drawDesktopWindowFrame }" :style="appUiFontFamilyStyle">
+      <div class="dbx-app-shell relative isolate h-screen w-screen max-w-full min-w-[760px] min-h-[600px] flex flex-col text-foreground overflow-hidden" :class="{ 'dbx-desktop-window-frame': drawDesktopWindowFrame }" :style="appUiFontFamilyStyle">
         <div class="dbx-window-background" aria-hidden="true" />
         <AppToolbar
           :is-dark="isDark"
@@ -2304,7 +2304,7 @@ onUnmounted(() => {
           @open-data-compare="dialogs.showDataCompareDialog.value = true"
         />
 
-        <div :class="isClassicLayout ? 'app-layout-classic flex-1 flex min-h-0' : 'app-panel-gutter flex-1 flex min-h-0 gap-1 p-1'">
+        <div class="dbx-app-content" :class="isClassicLayout ? 'app-layout-classic flex-1 flex min-h-0' : 'app-panel-gutter flex-1 flex min-h-0 gap-1 p-1'">
           <AppSidebar
             v-show="sidebarOpen"
             ref="appSidebarRef"
@@ -2316,13 +2316,13 @@ onUnmounted(() => {
             @collapse="setSidebarOpen(false)"
             @open-settings="(initialTab) => openSettings(initialTab ?? 'appearance')"
           />
-          <div v-show="!sidebarOpen" class="flex h-full w-8 shrink-0 items-start justify-center border-r bg-background/80 pt-2" :class="isClassicLayout ? '' : 'rounded-md border border-border/80'">
+          <div v-show="!sidebarOpen" class="dbx-sidebar-surface flex h-full w-8 shrink-0 items-start justify-center border-r pt-2" :class="isClassicLayout ? '' : 'rounded-md border border-border/80'">
             <Button variant="ghost" size="icon" class="h-7 w-7" :title="t('sidebar.expand')" :aria-label="t('sidebar.expand')" @click="setSidebarOpen(true)">
               <ChevronsRight class="h-4 w-4" />
             </Button>
           </div>
 
-          <div :class="isClassicLayout ? 'flex-1 min-w-0 overflow-hidden' : 'flex-1 min-w-0 overflow-hidden rounded-md border border-border/80 bg-background'">
+          <div class="dbx-main-surface" :class="isClassicLayout ? 'flex-1 min-w-0 overflow-hidden' : 'flex-1 min-w-0 overflow-hidden rounded-md border border-border/80'">
             <div class="h-full flex flex-col min-w-0">
               <AppTabBar
                 ref="appTabBarRef"
@@ -2487,7 +2487,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div v-if="showAiPanel" :class="isClassicLayout ? 'h-full shrink-0 relative z-30 isolate bg-background' : 'h-full shrink-0 relative z-30 isolate rounded-md border border-border/80 bg-background'" :style="{ width: aiPanelWidth + 'px' }">
+          <div v-if="showAiPanel" class="dbx-right-panel-surface" :class="isClassicLayout ? 'h-full shrink-0 relative z-30 isolate' : 'h-full shrink-0 relative z-30 isolate rounded-md border border-border/80'" :style="{ width: aiPanelWidth + 'px' }">
             <div class="panel-resize-handle panel-resize-handle--left" @mousedown="startAiPanelResize" />
             <div class="h-full min-h-0 overflow-hidden rounded-[inherit]">
               <AiAssistant
@@ -2507,21 +2507,21 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div v-if="showHistory" :class="isClassicLayout ? 'h-full shrink-0 relative z-30 isolate bg-background' : 'h-full shrink-0 relative z-30 isolate rounded-md border border-border/80 bg-background'" :style="{ width: historyWidth + 'px' }">
+          <div v-if="showHistory" class="dbx-right-panel-surface" :class="isClassicLayout ? 'h-full shrink-0 relative z-30 isolate' : 'h-full shrink-0 relative z-30 isolate rounded-md border border-border/80'" :style="{ width: historyWidth + 'px' }">
             <div class="panel-resize-handle panel-resize-handle--left" @mousedown="startHistoryResize" />
             <div class="h-full min-h-0 overflow-hidden rounded-[inherit]">
               <QueryHistory :current-connection-id="activeTab?.connectionId" :current-database="activeTab?.database" @restore="restoreHistorySql" @analyze-ai="analyzeHistoryWithAi" @close="closeRightSidebarPanel('history')" />
             </div>
           </div>
 
-          <div v-if="showSqlLibraryPanel" :class="isClassicLayout ? 'h-full shrink-0 relative z-30 isolate bg-background' : 'h-full shrink-0 relative z-30 isolate rounded-md border border-border/80 bg-background'" :style="{ width: sqlLibraryWidth + 'px' }">
+          <div v-if="showSqlLibraryPanel" class="dbx-right-panel-surface" :class="isClassicLayout ? 'h-full shrink-0 relative z-30 isolate' : 'h-full shrink-0 relative z-30 isolate rounded-md border border-border/80'" :style="{ width: sqlLibraryWidth + 'px' }">
             <div class="panel-resize-handle panel-resize-handle--left" @mousedown="startSqlLibraryResize" />
             <div class="h-full min-h-0 overflow-hidden rounded-[inherit]">
               <SqlLibraryPanel @close="closeRightSidebarPanel('sqlLibrary')" />
             </div>
           </div>
 
-          <div v-if="showSqlFilePanel" :class="isClassicLayout ? 'h-full shrink-0 relative z-30 isolate bg-background' : 'h-full shrink-0 relative z-30 isolate rounded-md border border-border/80 bg-background'" :style="{ width: sqlFilePanelWidth + 'px' }">
+          <div v-if="showSqlFilePanel" class="dbx-right-panel-surface" :class="isClassicLayout ? 'h-full shrink-0 relative z-30 isolate' : 'h-full shrink-0 relative z-30 isolate rounded-md border border-border/80'" :style="{ width: sqlFilePanelWidth + 'px' }">
             <div class="panel-resize-handle panel-resize-handle--left" @mousedown="startSqlFilePanelResize" />
             <div class="h-full min-h-0 overflow-hidden rounded-[inherit]">
               <SqlFilePanel @close="closeRightSidebarPanel('sqlFile')" />
